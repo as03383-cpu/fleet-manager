@@ -1,0 +1,8 @@
+# DB / 설정 파일 — 절대 GitHub에 올리지 않음
+*.db
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+.env
