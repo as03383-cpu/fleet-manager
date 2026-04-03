@@ -176,9 +176,9 @@ else:
             st.session_state.veh_cost_open    = None
             st.rerun()
 
-        # ── 비용 패널 ─────────────────────────────────────────
+        # ── 비용 패널 (목록 데이터 재사용 → 추가 DB 쿼리 없음) ──
         if is_cost_open:
-            full = get_vehicle(vid)
+            full = r   # get_vehicles()에 비용 컬럼이 포함돼 있으므로 바로 사용
             if full:
                 vp   = safe_int(full.get("vehicle_price", 0))
                 cm   = safe_int(full.get("commission", 0))

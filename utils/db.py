@@ -181,7 +181,9 @@ def get_vehicles(search="", status_filter="전체"):
         params.append(status_filter)
     clause = ("WHERE " + " AND ".join(where)) if where else ""
     sql = f"""SELECT id, stock_number, plate, make, model, year, mileage,
-                     status, driver, purchase_date, reg_date, sale_date, seller_name
+                     status, driver, purchase_date, reg_date, sale_date, seller_name,
+                     vehicle_price, commission, transport_fee, fuel_fee,
+                     performance_spec, repair_cost, sale_price
               FROM vehicles {clause} ORDER BY id DESC"""
     return fetchall(sql, params)
 
