@@ -169,7 +169,13 @@ def init_db():
         if USE_POSTGRES:
             conn.commit()
 
+# ── 캐시 초기화 헬퍼 ─────────────────────────────────────────
+# 데이터 변경(insert/update/delete) 후 호출 → 다음 읽기 시 DB에서 새로 가져옴
+def clear_cache():
+    st.cache_data.clear()
+
 # ── 차량 쿼리 ────────────────────────────────────────────────
+@st.cache_data(ttl=60)  # 60초 캐시 → 같은 조건 재조회 시 DB 쿼리 생략
 def get_vehicles(search="", status_filter="전체"):
     where, params = [], []
     if search:
@@ -194,18 +200,22 @@ def insert_vehicle(data: dict):
     cols = ",".join(data.keys())
     phs  = ",".join([PH] * len(data))
     execute(f"INSERT INTO vehicles ({cols}) VALUES ({phs})", list(data.values()))
+    clear_cache()
 
 def update_vehicle(vehicle_id, data: dict):
     sets = ",".join(f"{k}={PH}" for k in data.keys())
     execute(f"UPDATE vehicles SET {sets} WHERE id={PH}",
             list(data.values()) + [vehicle_id])
+    clear_cache()
 
 def delete_vehicle(vehicle_id):
     execute(f"DELETE FROM maintenance WHERE vehicle_id={PH}", (vehicle_id,))
     execute(f"DELETE FROM locations   WHERE vehicle_id={PH}", (vehicle_id,))
     execute(f"DELETE FROM vehicles    WHERE id={PH}",         (vehicle_id,))
+    clear_cache()
 
 # ── 정비이력 쿼리 ────────────────────────────────────────────
+@st.cache_data(ttl=60)
 def get_maintenance(vehicle_id=None, search=""):
     where, params = [], []
     if vehicle_id:
@@ -230,6 +240,7 @@ def insert_maintenance(data: dict):
     phs  = ",".join([PH] * len(data))
     execute(f"INSERT INTO maintenance ({cols}) VALUES ({phs})", list(data.values()))
     _sync_repair_cost(data["vehicle_id"])
+    clear_cache()
 
 def update_maintenance(maint_id, data: dict):
     sets = ",".join(f"{k}={PH}" for k in data.keys())
@@ -238,12 +249,14 @@ def update_maintenance(maint_id, data: dict):
     vid = fetchone(f"SELECT vehicle_id FROM maintenance WHERE id={PH}", (maint_id,))
     if vid:
         _sync_repair_cost(vid["vehicle_id"])
+    clear_cache()
 
 def delete_maintenance(maint_id):
     row = fetchone(f"SELECT vehicle_id FROM maintenance WHERE id={PH}", (maint_id,))
     execute(f"DELETE FROM maintenance WHERE id={PH}", (maint_id,))
     if row:
         _sync_repair_cost(row["vehicle_id"])
+    clear_cache()
 
 def _sync_repair_cost(vehicle_id):
     total = fetchone(
@@ -253,6 +266,7 @@ def _sync_repair_cost(vehicle_id):
     execute(f"UPDATE vehicles SET repair_cost={PH} WHERE id={PH}", (total, vehicle_id))
 
 # ── 위치 쿼리 ────────────────────────────────────────────────
+@st.cache_data(ttl=60)
 def get_locations(vehicle_id=None):
     if vehicle_id:
         sql = f"""SELECT l.id, l.recorded_at, v.plate, l.location_name, l.notes
@@ -268,11 +282,14 @@ def insert_location(data: dict):
     cols = ",".join(data.keys())
     phs  = ",".join([PH] * len(data))
     execute(f"INSERT INTO locations ({cols}) VALUES ({phs})", list(data.values()))
+    clear_cache()
 
 def delete_location(loc_id):
     execute(f"DELETE FROM locations WHERE id={PH}", (loc_id,))
+    clear_cache()
 
 # ── 대시보드 통계 ─────────────────────────────────────────────
+@st.cache_data(ttl=60)
 def get_stats():
     return fetchone("""
         SELECT COUNT(*) AS total,
@@ -285,11 +302,13 @@ def get_stats():
         FROM vehicles
     """)
 
+@st.cache_data(ttl=60)
 def get_recent_vehicles(limit=7):
     return fetchall(
         f"SELECT plate, make, model, status FROM vehicles ORDER BY id DESC LIMIT {PH}",
         (limit,)
     )
 
+@st.cache_data(ttl=60)
 def get_all_vehicles_simple():
     return fetchall("SELECT id, plate, make, model FROM vehicles ORDER BY plate")

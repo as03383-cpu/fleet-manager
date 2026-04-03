@@ -14,8 +14,11 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── DB 초기화 (최초 1회) ─────────────────────────────────────
-init_db()
+# ── DB 초기화 (세션당 1회만 실행) ────────────────────────────
+# st.rerun() 할 때마다 실행되면 매번 DB 연결 발생 → 느려짐
+if "db_initialized" not in st.session_state:
+    init_db()
+    st.session_state.db_initialized = True
 
 # ── 커스텀 CSS ───────────────────────────────────────────────
 st.markdown("""
