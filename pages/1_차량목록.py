@@ -87,25 +87,6 @@ with c4:
         st.session_state.veh_cost_open     = None
         st.session_state.veh_quick_status  = None
 
-# ── 빠른 상태변경 폼 (상단 고정) ─────────────────────────────
-if st.session_state.veh_quick_status:
-    qvid = st.session_state.veh_quick_status
-    qv   = get_vehicle(qvid)
-    if qv:
-        st.markdown('<div class="quick-status-box">', unsafe_allow_html=True)
-        st.markdown(f"**🔄 [{qv.get('plate','')}] 상태 빠른 변경**")
-        with st.form("quick_status_form"):
-            cur_idx    = STATUS_LIST.index(qv["status"]) if qv.get("status") in STATUS_LIST else 0
-            new_status = st.selectbox("새 상태", STATUS_LIST, index=cur_idx)
-            qc1, qc2   = st.columns(2)
-            if qc1.form_submit_button("✅ 변경", type="primary", use_container_width=True):
-                update_vehicle(qvid, {"status": new_status})
-                st.session_state.veh_quick_status = None
-                st.rerun()
-            if qc2.form_submit_button("✖ 취소", use_container_width=True):
-                st.session_state.veh_quick_status = None
-                st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
 
 # ── 차량 목록 ─────────────────────────────────────────────────
 rows = get_vehicles(search=search, status_filter=status_filter)
@@ -128,7 +109,6 @@ else:
         vid    = r["id"]
         status = r.get("status", "")
         color  = STATUS_COLORS.get(status, "#94a3b8")
-        is_cost_open = (st.session_state.veh_cost_open == vid)
 
         rcols = st.columns([1.2, 1.5, 1.2, 1, 1.2, 0.8, 2.2, 1.5, 1.2, 1.2, 1.2, 1.5, 0.7, 0.7, 0.7, 0.7])
         rcols[0].write(r.get("stock_number") or "-")
@@ -147,37 +127,51 @@ else:
         rcols[10].write(r.get("sale_date", "") or "-")
         rcols[11].write(r.get("seller_name", "") or "-")
 
-        # 💰 비용 패널 토글
-        cost_label = "🔼" if is_cost_open else "💰"
-        if rcols[12].button(cost_label, key=f"cost_{vid}", help="비용/이윤 보기"):
-            st.session_state.veh_cost_open    = None if is_cost_open else vid
+        # 💰 비용 패널 토글 — st.rerun() 제거: 버튼 클릭 후 같은 rerun에서 상태 반영됨
+        if rcols[12].button(
+            "🔼" if st.session_state.veh_cost_open == vid else "💰",
+            key=f"cost_{vid}", help="비용/이윤 보기"
+        ):
+            st.session_state.veh_cost_open    = None if st.session_state.veh_cost_open == vid else vid
             st.session_state.veh_quick_status = None
-            st.rerun()
 
         # ✏️ 수정
         if rcols[13].button("✏️", key=f"edit_{vid}", help="수정"):
-            st.session_state.veh_edit_id       = vid
-            st.session_state.veh_show_form     = True
-            st.session_state.veh_cost_open     = None
-            st.session_state.veh_quick_status  = None
-            st.rerun()
+            st.session_state.veh_edit_id      = vid
+            st.session_state.veh_show_form    = True
+            st.session_state.veh_cost_open    = None
+            st.session_state.veh_quick_status = None
 
         # 🗑️ 삭제
         if rcols[14].button("🗑️", key=f"del_{vid}", help="삭제"):
-            st.session_state.veh_confirm_del   = vid
-            st.session_state.veh_quick_status  = None
-            st.rerun()
+            st.session_state.veh_confirm_del  = vid
+            st.session_state.veh_quick_status = None
 
-        # 🔄 빠른 상태변경
-        qs_active = (st.session_state.veh_quick_status == vid)
-        qs_label  = "🔼" if qs_active else "🔄"
-        if rcols[15].button(qs_label, key=f"qs_{vid}", help="상태 빠른 변경"):
-            st.session_state.veh_quick_status = None if qs_active else vid
+        # 🔄 빠른 상태변경 토글 — st.rerun() 제거
+        if rcols[15].button(
+            "🔼" if st.session_state.veh_quick_status == vid else "🔄",
+            key=f"qs_{vid}", help="상태 빠른 변경"
+        ):
+            st.session_state.veh_quick_status = None if st.session_state.veh_quick_status == vid else vid
             st.session_state.veh_cost_open    = None
-            st.rerun()
 
-        # ── 비용 패널 (목록 데이터 재사용 → 추가 DB 쿼리 없음) ──
-        if is_cost_open:
+        # ── 빠른 상태변경 폼 (인라인) — rerun 없이 같은 render에서 표시 ──
+        if st.session_state.veh_quick_status == vid:
+            cur_status = r.get("status", "")
+            cur_idx    = STATUS_LIST.index(cur_status) if cur_status in STATUS_LIST else 0
+            with st.form(f"qs_form_{vid}"):
+                st.markdown(f"**🔄 [{r.get('plate','')}] 상태 변경**")
+                new_status = st.selectbox("새 상태", STATUS_LIST, index=cur_idx)
+                qc1, qc2   = st.columns(2)
+                if qc1.form_submit_button("✅ 변경", type="primary", use_container_width=True):
+                    update_vehicle(vid, {"status": new_status})
+                    st.session_state.veh_quick_status = None
+                    st.rerun()
+                if qc2.form_submit_button("✖ 취소", use_container_width=True):
+                    st.session_state.veh_quick_status = None
+
+        # ── 비용 패널 (상태를 직접 읽어 추가 rerun 불필요) ──
+        if st.session_state.veh_cost_open == vid:
             full = r   # get_vehicles()에 비용 컬럼이 포함돼 있으므로 바로 사용
             if full:
                 vp   = safe_int(full.get("vehicle_price", 0))
