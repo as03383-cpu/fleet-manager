@@ -284,6 +284,19 @@ def insert_location(data: dict):
     execute(f"INSERT INTO locations ({cols}) VALUES ({phs})", list(data.values()))
     clear_cache()
 
+def get_location(loc_id):
+    return fetchone(f"""
+        SELECT l.*, v.plate FROM locations l
+        JOIN vehicles v ON l.vehicle_id=v.id
+        WHERE l.id={PH}
+    """, (loc_id,))
+
+def update_location(loc_id, data: dict):
+    sets = ",".join(f"{k}={PH}" for k in data.keys())
+    execute(f"UPDATE locations SET {sets} WHERE id={PH}",
+            list(data.values()) + [loc_id])
+    clear_cache()
+
 def delete_location(loc_id):
     execute(f"DELETE FROM locations WHERE id={PH}", (loc_id,))
     clear_cache()

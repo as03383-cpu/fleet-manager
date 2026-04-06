@@ -1,5 +1,7 @@
 """
 pages/2_정비이력.py — 정비 이력 관리
+  - 페이지네이션 (100건 단위)
+  - 차량 사이드바 필터
 """
 
 import streamlit as st
@@ -13,11 +15,18 @@ from utils.helpers import MAINT_TYPES, safe_int, fmt_won
 st.set_page_config(page_title="정비 이력", page_icon="🔧", layout="wide")
 st.title("🔧 정비 이력")
 
+PAGE_SIZE = 100
+
 # ── 세션 상태 ────────────────────────────────────────────────
-if "maint_edit_id"   not in st.session_state: st.session_state.maint_edit_id   = None
-if "maint_show_form" not in st.session_state: st.session_state.maint_show_form = False
-if "maint_confirm_del" not in st.session_state: st.session_state.maint_confirm_del = None
-if "maint_filter_vid" not in st.session_state: st.session_state.maint_filter_vid = None
+for key, default in [
+    ("maint_edit_id",      None),
+    ("maint_show_form",    False),
+    ("maint_confirm_del",  None),
+    ("maint_filter_vid",   None),
+    ("maint_page",         0),
+]:
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 # ── 차량 선택 사이드바 ───────────────────────────────────────
 vehicles = get_all_vehicles_simple()
@@ -33,7 +42,10 @@ with st.sidebar:
         list(veh_options.keys()),
         label_visibility="collapsed"
     )
-    st.session_state.maint_filter_vid = veh_options[selected_label]
+    new_vid = veh_options[selected_label]
+    if new_vid != st.session_state.maint_filter_vid:
+        st.session_state.maint_filter_vid = new_vid
+        st.session_state.maint_page = 0
 
 # ── 상단 버튼 ────────────────────────────────────────────────
 c1, c2 = st.columns([6, 1])
@@ -49,12 +61,38 @@ with c2:
 
 # ── 정비이력 목록 ────────────────────────────────────────────
 vid  = st.session_state.maint_filter_vid
-rows = get_maintenance(vehicle_id=vid, search=search)
+all_rows = get_maintenance(vehicle_id=vid, search=search)
 
-if not rows:
+if not all_rows:
     st.info("정비 기록이 없습니다.")
 else:
-    st.caption(f"총 {len(rows)}건")
+    total_count = len(all_rows)
+    total_pages = max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = st.session_state.maint_page
+    if page >= total_pages:
+        page = total_pages - 1
+        st.session_state.maint_page = page
+
+    start = page * PAGE_SIZE
+    end   = min(start + PAGE_SIZE, total_count)
+    rows  = all_rows[start:end]
+
+    # ── 페이지 네비게이션 (상단) ──
+    if total_pages > 1:
+        nav1, nav2, nav3 = st.columns([1, 3, 1])
+        if nav1.button("◀ 이전", disabled=(page == 0), use_container_width=True, key="mprev_top"):
+            st.session_state.maint_page = page - 1
+            st.rerun()
+        nav2.markdown(
+            f"<div style='text-align:center;padding:8px;color:#94a3b8'>"
+            f"페이지 {page+1}/{total_pages}  (전체 {total_count}건)</div>",
+            unsafe_allow_html=True
+        )
+        if nav3.button("다음 ▶", disabled=(page >= total_pages - 1), use_container_width=True, key="mnext_top"):
+            st.session_state.maint_page = page + 1
+            st.rerun()
+    else:
+        st.caption(f"총 {total_count}건")
 
     hcols = st.columns([1.5, 1.5, 2, 1.5, 3, 1.2, 1.5, 2, 1, 1])
     for col, label in zip(hcols, [
@@ -82,6 +120,21 @@ else:
 
         if rcols[9].button("🗑️", key=f"mdel_{r['id']}"):
             st.session_state.maint_confirm_del = r["id"]
+            st.rerun()
+
+    # ── 페이지 네비게이션 (하단) ──
+    if total_pages > 1:
+        nav1b, nav2b, nav3b = st.columns([1, 3, 1])
+        if nav1b.button("◀ 이전", disabled=(page == 0), use_container_width=True, key="mprev_bot"):
+            st.session_state.maint_page = page - 1
+            st.rerun()
+        nav2b.markdown(
+            f"<div style='text-align:center;padding:8px;color:#94a3b8'>"
+            f"페이지 {page+1}/{total_pages}  (전체 {total_count}건)</div>",
+            unsafe_allow_html=True
+        )
+        if nav3b.button("다음 ▶", disabled=(page >= total_pages - 1), use_container_width=True, key="mnext_bot"):
+            st.session_state.maint_page = page + 1
             st.rerun()
 
 # ── 삭제 확인 ────────────────────────────────────────────────

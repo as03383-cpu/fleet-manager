@@ -5,6 +5,8 @@ pages/1_차량목록.py — 차량 목록 / 등록 / 수정 / 삭제
   - USD 환율 적용 이윤 계산
   - 상태별 색상 배지
   - 🔄 빠른 상태 변경 (원본 우클릭 메뉴 대체)
+  - 컬럼 헤더 필터 (제조사, 담당자, 연식)
+  - 페이지네이션 (100건 단위)
 """
 
 import streamlit as st
@@ -62,11 +64,15 @@ for key, default in [
     ("veh_show_form",      False),
     ("veh_confirm_del",    None),
     ("veh_cost_open",      None),
-    ("veh_quick_status",   None),   # 빠른 상태변경 대상 차량 ID
+    ("veh_quick_status",   None),
     ("veh_rate",           1350),
+    ("veh_page",           0),
+    ("veh_col_filter",     {}),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
+
+PAGE_SIZE = 100
 
 # ── 검색 / 필터 / 환율 바 ─────────────────────────────────────
 c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
@@ -89,14 +95,88 @@ with c4:
 
 
 # ── 차량 목록 ─────────────────────────────────────────────────
-rows = get_vehicles(search=search, status_filter=status_filter)
+all_rows = get_vehicles(search=search, status_filter=status_filter)
+
+# ── 컬럼 헤더 필터 적용 ──────────────────────────────────────
+col_filters = st.session_state.veh_col_filter
+FILTER_KEYS = {
+    "제조사": "make",
+    "담당자": "driver",
+    "연식":   "year",
+}
+filtered_rows = all_rows
+for col_label, col_key in FILTER_KEYS.items():
+    fval = col_filters.get(col_label)
+    if fval and fval != "전체":
+        filtered_rows = [r for r in filtered_rows if str(r.get(col_key, "") or "") == fval]
+
+# ── 활성 필터 표시 + 초기화 ──────────────────────────────────
+active_filters = {k: v for k, v in col_filters.items() if v and v != "전체"}
+if active_filters:
+    filter_text = " / ".join(f"{k}={v}" for k, v in active_filters.items())
+    fc1, fc2 = st.columns([6, 1])
+    fc1.caption(f"🔽 컬럼 필터: {filter_text}")
+    if fc2.button("✖ 필터 초기화", use_container_width=True):
+        st.session_state.veh_col_filter = {}
+        st.session_state.veh_page = 0
+        st.rerun()
+
+# 필터용 고유값 추출
+unique_vals = {}
+for col_label, col_key in FILTER_KEYS.items():
+    vals = sorted({str(r.get(col_key, "") or "") for r in all_rows if r.get(col_key)})
+    unique_vals[col_label] = vals
+
+with st.expander("🔽 컬럼별 필터 (제조사 / 담당자 / 연식)", expanded=False):
+    fcols = st.columns(len(FILTER_KEYS))
+    for i, (col_label, col_key) in enumerate(FILTER_KEYS.items()):
+        options = ["전체"] + unique_vals.get(col_label, [])
+        current = col_filters.get(col_label, "전체")
+        try:
+            idx = options.index(current)
+        except ValueError:
+            idx = 0
+        new_val = fcols[i].selectbox(
+            col_label, options, index=idx, key=f"cfilter_{col_label}"
+        )
+        if new_val != col_filters.get(col_label):
+            st.session_state.veh_col_filter[col_label] = new_val
+            st.session_state.veh_page = 0
+
+rows = filtered_rows
 
 if not rows:
     st.info("조건에 맞는 차량이 없습니다.")
 else:
-    st.caption(f"총 **{len(rows)}**대")
+    total_count = len(rows)
+    total_pages = max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = st.session_state.veh_page
+    if page >= total_pages:
+        page = total_pages - 1
+        st.session_state.veh_page = page
 
-    # 테이블 헤더 (🔄 컬럼 추가)
+    start = page * PAGE_SIZE
+    end   = min(start + PAGE_SIZE, total_count)
+    page_rows = rows[start:end]
+
+    # ── 페이지 네비게이션 (상단) ──
+    if total_pages > 1:
+        nav1, nav2, nav3 = st.columns([1, 3, 1])
+        if nav1.button("◀ 이전", disabled=(page == 0), use_container_width=True, key="prev_top"):
+            st.session_state.veh_page = page - 1
+            st.rerun()
+        nav2.markdown(
+            f"<div style='text-align:center;padding:8px;color:#94a3b8'>"
+            f"페이지 {page+1}/{total_pages}  (전체 {total_count}대)</div>",
+            unsafe_allow_html=True
+        )
+        if nav3.button("다음 ▶", disabled=(page >= total_pages - 1), use_container_width=True, key="next_top"):
+            st.session_state.veh_page = page + 1
+            st.rerun()
+    else:
+        st.caption(f"총 **{total_count}**대")
+
+    # 테이블 헤더
     hcols = st.columns([1.2, 1.5, 1.2, 1, 1.2, 0.8, 2.2, 1.5, 1.2, 1.2, 1.2, 1.5, 0.7, 0.7, 0.7, 0.7])
     for col, label in zip(hcols, [
         "스톡넘버","번호판","제조사","담당자","모델","연식",
@@ -105,7 +185,7 @@ else:
         col.markdown(f'<div class="table-header">{label}</div>', unsafe_allow_html=True)
     st.divider()
 
-    for r in rows:
+    for r in page_rows:
         vid    = r["id"]
         status = r.get("status", "")
         color  = STATUS_COLORS.get(status, "#94a3b8")
@@ -127,7 +207,7 @@ else:
         rcols[10].write(r.get("sale_date", "") or "-")
         rcols[11].write(r.get("seller_name", "") or "-")
 
-        # 💰 비용 패널 토글 — st.rerun() 제거: 버튼 클릭 후 같은 rerun에서 상태 반영됨
+        # 💰 비용 패널 토글
         if rcols[12].button(
             "🔼" if st.session_state.veh_cost_open == vid else "💰",
             key=f"cost_{vid}", help="비용/이윤 보기"
@@ -147,7 +227,7 @@ else:
             st.session_state.veh_confirm_del  = vid
             st.session_state.veh_quick_status = None
 
-        # 🔄 빠른 상태변경 토글 — st.rerun() 제거
+        # 🔄 빠른 상태변경 토글
         if rcols[15].button(
             "🔼" if st.session_state.veh_quick_status == vid else "🔄",
             key=f"qs_{vid}", help="상태 빠른 변경"
@@ -155,7 +235,7 @@ else:
             st.session_state.veh_quick_status = None if st.session_state.veh_quick_status == vid else vid
             st.session_state.veh_cost_open    = None
 
-        # ── 빠른 상태변경 폼 (인라인) — rerun 없이 같은 render에서 표시 ──
+        # ── 빠른 상태변경 폼 (인라인) ──
         if st.session_state.veh_quick_status == vid:
             cur_status = r.get("status", "")
             cur_idx    = STATUS_LIST.index(cur_status) if cur_status in STATUS_LIST else 0
@@ -170,9 +250,9 @@ else:
                 if qc2.form_submit_button("✖ 취소", use_container_width=True):
                     st.session_state.veh_quick_status = None
 
-        # ── 비용 패널 (상태를 직접 읽어 추가 rerun 불필요) ──
+        # ── 비용 패널 ──
         if st.session_state.veh_cost_open == vid:
-            full = r   # get_vehicles()에 비용 컬럼이 포함돼 있으므로 바로 사용
+            full = r
             if full:
                 vp   = safe_int(full.get("vehicle_price", 0))
                 cm   = safe_int(full.get("commission", 0))
@@ -205,6 +285,21 @@ else:
   </div>
 </div>
 """, unsafe_allow_html=True)
+
+    # ── 페이지 네비게이션 (하단) ──
+    if total_pages > 1:
+        nav1b, nav2b, nav3b = st.columns([1, 3, 1])
+        if nav1b.button("◀ 이전", disabled=(page == 0), use_container_width=True, key="prev_bot"):
+            st.session_state.veh_page = page - 1
+            st.rerun()
+        nav2b.markdown(
+            f"<div style='text-align:center;padding:8px;color:#94a3b8'>"
+            f"페이지 {page+1}/{total_pages}  (전체 {total_count}대)</div>",
+            unsafe_allow_html=True
+        )
+        if nav3b.button("다음 ▶", disabled=(page >= total_pages - 1), use_container_width=True, key="next_bot"):
+            st.session_state.veh_page = page + 1
+            st.rerun()
 
 # ── 삭제 확인 ─────────────────────────────────────────────────
 if st.session_state.veh_confirm_del:
