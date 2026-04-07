@@ -241,6 +241,17 @@ else:
 
         # ── 💰 비용 패널 (인라인) ──────────────────────────
         if st.session_state.veh_cost_open == vid:
+            rate_key = f"rate_{vid}"
+            if rate_key not in st.session_state:
+                st.session_state[rate_key] = 1350
+
+            # 환율 입력 — 폼 밖이므로 즉시 반영
+            st.number_input(
+                "💱 환율 (원/USD)", min_value=100, max_value=9999, step=10,
+                key=rate_key
+            )
+            rate = st.session_state[rate_key]
+
             vp = safe_int(r.get("vehicle_price", 0))
             cm = safe_int(r.get("commission", 0))
             tf = safe_int(r.get("transport_fee", 0))
@@ -251,7 +262,7 @@ else:
             dm = calc_dealer_margin(sp)
 
             total    = vp + cm + tf + ff + ps + rc + dm
-            sale_krw = sp * st.session_state.veh_rate
+            sale_krw = sp * rate
             profit   = sale_krw - total
             p_cls    = "cost-profit-pos" if profit >= 0 else "cost-profit-neg"
 
@@ -268,7 +279,7 @@ else:
   <div class="cost-row"><span class="cost-label">수리비(자동)</span><span class="cost-value">{rc:,}원</span></div>
   <div class="cost-row"><span class="cost-label">딜러마진(자동)</span><span class="cost-value">{dm:,}원</span></div>
   <div class="cost-row"><span class="cost-total">총 비용</span><span class="cost-total">{total:,}원</span></div>
-  <div class="cost-row"><span class="cost-label">판매가 {sp:,}USD × {st.session_state.veh_rate:,}</span><span class="cost-value">{sale_krw:,}원</span></div>
+  <div class="cost-row"><span class="cost-label">판매가 {sp:,}USD × {rate:,}</span><span class="cost-value">{sale_krw:,}원</span></div>
   <div class="cost-row"><span class="cost-label">이윤</span>
     <span class="{p_cls}">{"▲" if profit>=0 else "▼"} {abs(profit):,}원</span>
   </div>
@@ -278,9 +289,19 @@ else:
         # ── ✏️ 인라인 수정 폼 ─────────────────────────────
         if st.session_state.veh_show_form and st.session_state.veh_edit_id == vid:
             data = get_vehicle(vid) or {}
-            fk   = f"ef_{vid}"   # 폼 위젯 키 접두사
+            fk       = f"ef_{vid}"   # 폼 위젯 키 접두사
+            rate_key = f"rate_{vid}"
+            if rate_key not in st.session_state:
+                st.session_state[rate_key] = 1350
+
             st.markdown('<div class="inline-form-box">', unsafe_allow_html=True)
             st.subheader(f"✏️ 차량 수정 — {data.get('plate','')}")
+
+            # 환율 입력 — 폼 밖에서 즉시 반영
+            st.number_input(
+                "💱 환율 (원/USD)", min_value=100, max_value=9999, step=10,
+                key=rate_key
+            )
 
             with st.form(f"veh_edit_form_{vid}", clear_on_submit=False):
 
@@ -339,14 +360,8 @@ else:
                 repair_cost_val = safe_int(data.get("repair_cost", 0))
                 st.info(f"🔒 수리비(정비이력 자동합산): **{repair_cost_val:,}원**")
 
-                # 환율 입력 (이윤 바로 위)
-                rate_val = st.number_input(
-                    "💱 환율 (원/USD)", value=st.session_state.veh_rate,
-                    min_value=100, max_value=9999, step=10, key=f"{fk}_rate"
-                )
-                st.session_state.veh_rate = rate_val
-
-                # 실시간 미리보기
+                # 이윤 미리보기 (환율은 폼 밖 number_input에서 즉시 반영됨)
+                rate_now = st.session_state.get(rate_key, 1350)
                 vp_p  = safe_int(vehicle_price)
                 cm_p  = safe_int(commission)
                 tf_p  = safe_int(transport_fee)
@@ -355,12 +370,13 @@ else:
                 sp_p  = safe_int(sale_price_usd)
                 dm_p  = calc_dealer_margin(sp_p)
                 tot_p = vp_p + cm_p + tf_p + ff_p + ps_p + repair_cost_val + dm_p
-                sal_p = sp_p * rate_val
+                sal_p = sp_p * rate_now
                 prf_p = sal_p - tot_p
 
                 pi1, pi2, pi3, pi4 = st.columns(4)
                 pi1.info(f"🚗 딜러마진(자동): **{dm_p:,}원**")
                 pi2.info(f"📊 총비용: **{tot_p:,}원**")
+                pi4.info(f"💱 환율: **{rate_now:,}원**")
                 if prf_p >= 0:
                     pi3.success(f"💹 이윤: **+{prf_p:,}원**")
                 else:
