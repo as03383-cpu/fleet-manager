@@ -187,7 +187,7 @@ def get_vehicles(search="", status_filter="전체"):
         params.append(status_filter)
     clause = ("WHERE " + " AND ".join(where)) if where else ""
     sql = f"""SELECT id, stock_number, plate, make, model, year, mileage,
-                     status, driver, purchase_date, reg_date, sale_date, seller_name,
+                     status, driver, purchase_date, sale_date, seller_name,
                      vehicle_price, commission, transport_fee, fuel_fee,
                      performance_spec, repair_cost, sale_price
               FROM vehicles {clause} ORDER BY id DESC"""
@@ -240,16 +240,51 @@ def insert_maintenance(data: dict):
     phs  = ",".join([PH] * len(data))
     execute(f"INSERT INTO maintenance ({cols}) VALUES ({phs})", list(data.values()))
     _sync_repair_cost(data["vehicle_id"])
+    # 정비소 이름 → 위치관리 자동 등록
+    shop = (data.get("shop") or "").strip()
+    if shop:
+        _auto_location_from_shop(data["vehicle_id"], shop, data.get("maint_date",""))
     clear_cache()
 
 def update_maintenance(maint_id, data: dict):
     sets = ",".join(f"{k}={PH}" for k in data.keys())
     execute(f"UPDATE maintenance SET {sets} WHERE id={PH}",
             list(data.values()) + [maint_id])
-    vid = fetchone(f"SELECT vehicle_id FROM maintenance WHERE id={PH}", (maint_id,))
-    if vid:
-        _sync_repair_cost(vid["vehicle_id"])
+    vid_row = fetchone(f"SELECT vehicle_id FROM maintenance WHERE id={PH}", (maint_id,))
+    if vid_row:
+        _sync_repair_cost(vid_row["vehicle_id"])
+    # 정비소 이름 → 위치관리 자동 등록
+    shop = (data.get("shop") or "").strip()
+    if shop:
+        vehicle_id = data.get("vehicle_id") or (vid_row["vehicle_id"] if vid_row else None)
+        if vehicle_id:
+            _auto_location_from_shop(vehicle_id, shop, data.get("maint_date",""))
     clear_cache()
+
+def _auto_location_from_shop(vehicle_id, shop_name, maint_date=""):
+    """정비소 이름으로 위치 자동 등록.
+    같은 차량 + 같은 정비소 + 같은 날짜 조합이 이미 있으면 중복 등록 안 함."""
+    if USE_POSTGRES:
+        date_expr = f"DATE(recorded_at) = DATE({PH}::timestamptz)" if maint_date else f"DATE(recorded_at) = CURRENT_DATE"
+    else:
+        date_expr = f"DATE(recorded_at) = {PH}" if maint_date else f"DATE(recorded_at) = DATE('now')"
+
+    if maint_date:
+        existing = fetchone(
+            f"SELECT id FROM locations WHERE vehicle_id={PH} AND location_name={PH} AND {date_expr}",
+            (vehicle_id, shop_name, maint_date)
+        )
+    else:
+        existing = fetchone(
+            f"SELECT id FROM locations WHERE vehicle_id={PH} AND location_name={PH} AND {date_expr}",
+            (vehicle_id, shop_name)
+        )
+
+    if not existing:
+        execute(
+            f"INSERT INTO locations (vehicle_id, location_name, notes) VALUES ({PH},{PH},{PH})",
+            (vehicle_id, shop_name, "🔧 정비소 자동 등록")
+        )
 
 def delete_maintenance(maint_id):
     row = fetchone(f"SELECT vehicle_id FROM maintenance WHERE id={PH}", (maint_id,))

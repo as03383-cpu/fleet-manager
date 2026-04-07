@@ -16,10 +16,11 @@ from utils.db import (
 )
 from utils.helpers import (
     STATUS_LIST, FUEL_TYPES, STATUS_COLORS,
-    safe_int, fmt_km_mi, fmt_won
+    safe_int, fmt_km_mi, fmt_won, MOBILE_CSS
 )
 
 st.set_page_config(page_title="차량 목록", page_icon="🚗", layout="wide")
+st.markdown(MOBILE_CSS, unsafe_allow_html=True)
 
 # ── 커스텀 CSS ──────────────────────────────────────────────────
 st.markdown("""
@@ -177,10 +178,10 @@ else:
         st.caption(f"총 **{total_count}**대")
 
     # 테이블 헤더
-    hcols = st.columns([1.2, 1.5, 1.2, 1, 1.2, 0.8, 2.2, 1.5, 1.2, 1.2, 1.2, 1.5, 0.7, 0.7, 0.7, 0.7])
+    hcols = st.columns([1.2, 1.5, 1.2, 1, 1.2, 0.8, 2.2, 1.5, 1.3, 1.2, 1.5, 0.7, 0.7, 0.7, 0.7])
     for col, label in zip(hcols, [
         "스톡넘버","번호판","제조사","담당자","모델","연식",
-        "주행거리","상태","구매일","등록일","판매일","판매자명","💰","✏️","🗑️","🔄"
+        "주행거리","상태","구매일","판매일","판매자명","💰","✏️","🗑️","🔄"
     ]):
         col.markdown(f'<div class="table-header">{label}</div>', unsafe_allow_html=True)
     st.divider()
@@ -190,7 +191,7 @@ else:
         status = r.get("status", "")
         color  = STATUS_COLORS.get(status, "#94a3b8")
 
-        rcols = st.columns([1.2, 1.5, 1.2, 1, 1.2, 0.8, 2.2, 1.5, 1.2, 1.2, 1.2, 1.5, 0.7, 0.7, 0.7, 0.7])
+        rcols = st.columns([1.2, 1.5, 1.2, 1, 1.2, 0.8, 2.2, 1.5, 1.3, 1.2, 1.5, 0.7, 0.7, 0.7, 0.7])
         rcols[0].write(r.get("stock_number") or "-")
         rcols[1].write(r.get("plate", ""))
         rcols[2].write(r.get("make", "") or "-")
@@ -203,12 +204,11 @@ else:
             unsafe_allow_html=True
         )
         rcols[8].write(r.get("purchase_date", "") or "-")
-        rcols[9].write(r.get("reg_date", "") or "-")
-        rcols[10].write(r.get("sale_date", "") or "-")
-        rcols[11].write(r.get("seller_name", "") or "-")
+        rcols[9].write(r.get("sale_date", "") or "-")
+        rcols[10].write(r.get("seller_name", "") or "-")
 
         # 💰 비용 패널 토글
-        if rcols[12].button(
+        if rcols[11].button(
             "🔼" if st.session_state.veh_cost_open == vid else "💰",
             key=f"cost_{vid}", help="비용/이윤 보기"
         ):
@@ -216,19 +216,19 @@ else:
             st.session_state.veh_quick_status = None
 
         # ✏️ 수정
-        if rcols[13].button("✏️", key=f"edit_{vid}", help="수정"):
+        if rcols[12].button("✏️", key=f"edit_{vid}", help="수정"):
             st.session_state.veh_edit_id      = vid
             st.session_state.veh_show_form    = True
             st.session_state.veh_cost_open    = None
             st.session_state.veh_quick_status = None
 
         # 🗑️ 삭제
-        if rcols[14].button("🗑️", key=f"del_{vid}", help="삭제"):
+        if rcols[13].button("🗑️", key=f"del_{vid}", help="삭제"):
             st.session_state.veh_confirm_del  = vid
             st.session_state.veh_quick_status = None
 
         # 🔄 빠른 상태변경 토글
-        if rcols[15].button(
+        if rcols[14].button(
             "🔼" if st.session_state.veh_quick_status == vid else "🔄",
             key=f"qs_{vid}", help="상태 빠른 변경"
         ):
@@ -330,10 +330,9 @@ if st.session_state.veh_show_form:
 
         # 기본 정보
         st.markdown("#### 📋 기본 정보")
-        r1c1, r1c2, r1c3 = st.columns(3)
+        r1c1, r1c2 = st.columns(2)
         purchase_date = r1c1.text_input("구매일 (YYYY-MM-DD)", value=data.get("purchase_date", ""))
-        reg_date      = r1c2.text_input("등록일 (YYYY-MM-DD)", value=data.get("reg_date", ""))
-        stock_number  = r1c3.text_input("스톡넘버",            value=data.get("stock_number", ""))
+        stock_number  = r1c2.text_input("스톡넘버",            value=data.get("stock_number", ""))
 
         r2c1, r2c2, r2c3 = st.columns(3)
         plate  = r2c1.text_input("번호판 *", value=data.get("plate", ""))
@@ -450,7 +449,6 @@ if st.session_state.veh_show_form:
                 sale_date        = sale_date.strip(),
                 seller_name      = seller_name.strip(),
                 purchase_date    = purchase_date.strip(),
-                reg_date         = reg_date.strip(),
             )
             try:
                 if is_edit:

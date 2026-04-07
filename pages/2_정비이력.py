@@ -10,9 +10,10 @@ from utils.db import (
     insert_maintenance, update_maintenance, delete_maintenance,
     get_all_vehicles_simple
 )
-from utils.helpers import MAINT_TYPES, safe_int, fmt_won
+from utils.helpers import MAINT_TYPES, safe_int, fmt_won, MOBILE_CSS
 
 st.set_page_config(page_title="정비 이력", page_icon="🔧", layout="wide")
+st.markdown(MOBILE_CSS, unsafe_allow_html=True)
 st.title("🔧 정비 이력")
 
 PAGE_SIZE = 100

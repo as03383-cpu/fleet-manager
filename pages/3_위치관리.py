@@ -11,8 +11,10 @@ from utils.db import (
     update_location, delete_location,
     get_all_vehicles_simple
 )
+from utils.helpers import MOBILE_CSS
 
 st.set_page_config(page_title="위치 관리", page_icon="📍", layout="wide")
+st.markdown(MOBILE_CSS, unsafe_allow_html=True)
 st.title("📍 위치 관리")
 
 PAGE_SIZE = 100

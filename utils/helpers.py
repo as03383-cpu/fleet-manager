@@ -43,3 +43,68 @@ def status_badge(status: str) -> str:
     """Streamlit markdown용 색상 뱃지 HTML"""
     color = STATUS_COLORS.get(status, "#94a3b8")
     return f'<span style="color:{color};font-weight:bold">{status}</span>'
+
+# ── 모바일 반응형 CSS ─────────────────────────────────────────
+MOBILE_CSS = """
+<style>
+/* ── 모바일 반응형 (768px 이하) ── */
+@media screen and (max-width: 768px) {
+    /* 여백 축소 */
+    .main .block-container {
+        padding-left: 0.4rem !important;
+        padding-right: 0.4rem !important;
+        padding-top: 0.8rem !important;
+        max-width: 100% !important;
+    }
+
+    /* 텍스트 크기 */
+    p, div, span, li, td, th { font-size: 0.77rem !important; }
+    h1 { font-size: 1.25rem !important; }
+    h2 { font-size: 1.05rem !important; }
+    h3 { font-size: 0.9rem !important; }
+
+    /* 버튼 */
+    .stButton > button {
+        font-size: 0.72rem !important;
+        padding: 0.2rem 0.4rem !important;
+        min-height: 1.8rem !important;
+    }
+
+    /* 테이블 행 가로 스크롤 */
+    [data-testid="stHorizontalBlock"] {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        flex-wrap: nowrap !important;
+    }
+    [data-testid="column"] {
+        min-width: 52px !important;
+        flex-shrink: 0 !important;
+    }
+
+    /* 입력 필드 */
+    .stTextInput input,
+    .stNumberInput input,
+    .stTextArea textarea { font-size: 0.8rem !important; }
+
+    /* 메트릭 카드 */
+    [data-testid="metric-container"] {
+        padding: 5px 7px !important;
+        min-width: 65px !important;
+    }
+    [data-testid="stMetricValue"] { font-size: 1.1rem !important; }
+    [data-testid="stMetricLabel"] { font-size: 0.6rem !important; }
+
+    /* 사이드바 */
+    [data-testid="stSidebar"] {
+        min-width: 200px !important;
+        max-width: 240px !important;
+    }
+
+    /* divider 여백 */
+    hr { margin: 0.4rem 0 !important; }
+
+    /* caption */
+    .stCaption { font-size: 0.72rem !important; }
+}
+</style>
+"""

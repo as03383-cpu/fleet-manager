@@ -4,7 +4,7 @@ app.py — 대시보드 (메인 페이지)
 
 import streamlit as st
 from utils.db import init_db, get_stats, get_recent_vehicles
-from utils.helpers import STATUS_COLORS, fmt_won
+from utils.helpers import STATUS_COLORS, fmt_won, MOBILE_CSS
 
 # ── 페이지 설정 ──────────────────────────────────────────────
 st.set_page_config(
@@ -19,6 +19,8 @@ st.set_page_config(
 if "db_initialized" not in st.session_state:
     init_db()
     st.session_state.db_initialized = True
+
+st.markdown(MOBILE_CSS, unsafe_allow_html=True)
 
 # ── 커스텀 CSS ───────────────────────────────────────────────
 st.markdown("""
