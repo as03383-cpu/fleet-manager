@@ -39,6 +39,20 @@ def fmt_km_mi(km):
     except Exception:
         return "-"
 
+MAKES_LIST = ["Chevrolet", "Renault", "KG Mobility", "Kia", "Hyundai"]
+
+def calc_dealer_margin(sale_price_usd) -> int:
+    """딜러마진 자동계산: 판매가(USD) 구간별 고정 마진"""
+    sp = safe_int(sale_price_usd)
+    if sp == 0:
+        return 0
+    elif sp <= 2500:
+        return 500_000
+    elif sp <= 3000:
+        return 700_000
+    else:
+        return 1_000_000
+
 def status_badge(status: str) -> str:
     """Streamlit markdown용 색상 뱃지 HTML"""
     color = STATUS_COLORS.get(status, "#94a3b8")
