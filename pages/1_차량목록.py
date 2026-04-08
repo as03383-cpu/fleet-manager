@@ -90,6 +90,121 @@ with c3:
         st.session_state.veh_cost_open    = None
         st.session_state.veh_quick_status = None
 
+# ── 새 차량 등록 폼 (검색바 바로 아래) ──────────────────────
+if st.session_state.veh_show_form and st.session_state.veh_edit_id is None:
+    fk = "nf"
+    st.divider()
+    st.subheader("➕ 차량 등록")
+
+    with st.form("veh_new_form", clear_on_submit=False):
+        st.markdown("#### 📋 기본 정보")
+        n1c1, n1c2 = st.columns(2)
+        purchase_date = n1c1.text_input("구매일 (YYYY-MM-DD)", key=f"{fk}_pd")
+        stock_number  = n1c2.text_input("스톡넘버",            key=f"{fk}_sn")
+
+        n2c1, n2c2, n2c3 = st.columns(3)
+        plate       = n2c1.text_input("번호판 *", key=f"{fk}_pl")
+        driver      = n2c3.text_input("담당자",   key=f"{fk}_dr")
+        make_sel    = n2c2.selectbox("제조사", MAKE_OPTIONS, index=0, key=f"{fk}_ms")
+        make_custom = n2c2.text_input("직접 입력", placeholder="예: Toyota, Ford...", key=f"{fk}_mc")
+
+        n3c1, n3c2, n3c3 = st.columns(3)
+        model = n3c1.text_input("모델명", key=f"{fk}_mo")
+        year  = n3c2.text_input("연식",   key=f"{fk}_yr")
+        color = n3c3.text_input("색상",   key=f"{fk}_cl")
+
+        n4c1, n4c2, n4c3 = st.columns(3)
+        vin       = n4c1.text_input("VIN", key=f"{fk}_vi")
+        fuel_type = n4c2.selectbox("연료",  FUEL_TYPES, key=f"{fk}_ft")
+        status    = n4c3.selectbox("상태",  STATUS_LIST, key=f"{fk}_st")
+
+        mileage = st.text_input("주행거리 (km)", key=f"{fk}_ml")
+
+        st.markdown("#### 💰 비용 정보")
+        nb1c1, nb1c2, nb1c3 = st.columns(3)
+        vehicle_price    = nb1c1.text_input("차량가격 (원)", key=f"{fk}_vp")
+        commission       = nb1c2.text_input("수수료 (원)",   key=f"{fk}_cm")
+        transport_fee    = nb1c3.text_input("탁송비 (원)",   key=f"{fk}_tf")
+
+        nb2c1, nb2c2, nb2c3 = st.columns(3)
+        fuel_fee         = nb2c1.text_input("기름값 (원)",   key=f"{fk}_ff")
+        performance_spec = nb2c2.text_input("성능비 (원)",   key=f"{fk}_ps")
+        sale_price_usd   = nb2c3.text_input("판매가 (USD)",  key=f"{fk}_sp")
+
+        rate_val = st.number_input(
+            "💱 환율 (원/USD)", value=st.session_state.veh_rate,
+            min_value=100, max_value=9999, step=10, key=f"{fk}_rate"
+        )
+
+        vp_p = safe_int(vehicle_price); cm_p = safe_int(commission)
+        tf_p = safe_int(transport_fee); ff_p = safe_int(fuel_fee)
+        sp_p = safe_int(sale_price_usd); dm_p = calc_dealer_margin(sp_p)
+        tot_p = vp_p + cm_p + tf_p + ff_p + safe_int(performance_spec) + dm_p
+        prf_p = sp_p * rate_val - tot_p
+
+        ni1, ni2, ni3 = st.columns(3)
+        ni1.info(f"🚗 딜러마진(자동): **{dm_p:,}원**")
+        ni2.info(f"📊 총비용: **{tot_p:,}원**")
+        if prf_p >= 0: ni3.success(f"💹 이윤: **+{prf_p:,}원**")
+        else:          ni3.error(f"💹 이윤: **{prf_p:,}원**")
+
+        st.markdown("#### 🏷️ 판매 정보")
+        ns1, ns2 = st.columns(2)
+        sale_date   = ns1.text_input("판매일 (YYYY-MM-DD)", key=f"{fk}_sd")
+        seller_name = ns2.text_input("판매자명",            key=f"{fk}_sl")
+
+        st.markdown("#### 👤 구매자 정보")
+        nbc1, nbc2 = st.columns(2)
+        buyer_name  = nbc1.text_input("구매자명", key=f"{fk}_bn")
+        buyer_phone = nbc2.text_input("연락처",   key=f"{fk}_bp")
+        nbc3, nbc4 = st.columns(2)
+        buyer_email   = nbc3.text_input("이메일", key=f"{fk}_be")
+        buyer_address = nbc4.text_input("주소",   key=f"{fk}_ba")
+        notes = st.text_area("📝 메모", height=80, key=f"{fk}_nt")
+
+        nfc1, nfc2 = st.columns(2)
+        submitted = nfc1.form_submit_button("💾 저장", type="primary", use_container_width=True)
+        cancelled = nfc2.form_submit_button("✖ 취소",  use_container_width=True)
+
+    if submitted:
+        if not plate.strip():
+            st.error("번호판은 필수 항목입니다.")
+        else:
+            st.session_state.veh_rate = rate_val
+            if make_sel == "✏️ 직접 입력":   final_make = make_custom.strip()
+            elif make_sel != "(선택하세요)":  final_make = make_sel
+            else:                             final_make = make_custom.strip()
+            try:
+                insert_vehicle(dict(
+                    plate=plate.strip(), make=final_make, model=model.strip(),
+                    year=safe_int(year), color=color.strip(), vin=vin.strip(),
+                    fuel_type=fuel_type, status=status, driver=driver.strip(),
+                    mileage=safe_int(mileage), vehicle_price=safe_int(vehicle_price),
+                    commission=safe_int(commission), transport_fee=safe_int(transport_fee),
+                    fuel_fee=safe_int(fuel_fee), sale_price=safe_int(sale_price_usd),
+                    stock_number=stock_number.strip(), performance_spec=performance_spec.strip(),
+                    buyer_name=buyer_name.strip(), buyer_phone=buyer_phone.strip(),
+                    buyer_email=buyer_email.strip(), buyer_address=buyer_address.strip(),
+                    notes=notes.strip(), sale_date=sale_date.strip(),
+                    seller_name=seller_name.strip(), purchase_date=purchase_date.strip(),
+                ))
+                st.success("✅ 등록되었습니다.")
+                st.session_state.veh_show_form = False
+                st.session_state.veh_edit_id   = None
+                st.rerun()
+            except Exception as e:
+                if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                    st.error("이미 등록된 번호판입니다.")
+                else:
+                    st.error(f"저장 실패: {e}")
+
+    if cancelled:
+        st.session_state.veh_show_form = False
+        st.session_state.veh_edit_id   = None
+        st.rerun()
+
+    st.divider()
+
 # ── 데이터 가져오기 + 컬럼 필터 ─────────────────────────────
 all_rows = get_vehicles(search=search, status_filter=status_filter)
 
@@ -501,144 +616,3 @@ if st.session_state.veh_confirm_del:
             st.session_state.veh_confirm_del = None
             st.rerun()
 
-# ── 새 차량 등록 폼 (하단) ───────────────────────────────────
-if st.session_state.veh_show_form and st.session_state.veh_edit_id is None:
-    fk = "nf"
-    st.divider()
-    st.subheader("➕ 차량 등록")
-
-    with st.form("veh_new_form", clear_on_submit=False):
-
-        st.markdown("#### 📋 기본 정보")
-        n1c1, n1c2 = st.columns(2)
-        purchase_date = n1c1.text_input("구매일 (YYYY-MM-DD)", key=f"{fk}_pd")
-        stock_number  = n1c2.text_input("스톡넘버",            key=f"{fk}_sn")
-
-        n2c1, n2c2, n2c3 = st.columns(3)
-        plate  = n2c1.text_input("번호판 *", key=f"{fk}_pl")
-        driver = n2c3.text_input("담당자",   key=f"{fk}_dr")
-
-        make_sel    = n2c2.selectbox("제조사", MAKE_OPTIONS, index=0, key=f"{fk}_ms")
-        make_custom = n2c2.text_input("직접 입력", placeholder="예: Toyota, Ford...", key=f"{fk}_mc")
-
-        n3c1, n3c2, n3c3 = st.columns(3)
-        model = n3c1.text_input("모델명", key=f"{fk}_mo")
-        year  = n3c2.text_input("연식",   key=f"{fk}_yr")
-        color = n3c3.text_input("색상",   key=f"{fk}_cl")
-
-        n4c1, n4c2, n4c3 = st.columns(3)
-        vin       = n4c1.text_input("VIN", key=f"{fk}_vi")
-        fuel_type = n4c2.selectbox("연료",  FUEL_TYPES, key=f"{fk}_ft")
-        status    = n4c3.selectbox("상태",  STATUS_LIST, key=f"{fk}_st")
-
-        mileage = st.text_input("주행거리 (km)", key=f"{fk}_ml")
-
-        st.markdown("#### 💰 비용 정보")
-        nb1c1, nb1c2, nb1c3 = st.columns(3)
-        vehicle_price    = nb1c1.text_input("차량가격 (원)",  key=f"{fk}_vp")
-        commission       = nb1c2.text_input("수수료 (원)",    key=f"{fk}_cm")
-        transport_fee    = nb1c3.text_input("탁송비 (원)",    key=f"{fk}_tf")
-
-        nb2c1, nb2c2, nb2c3 = st.columns(3)
-        fuel_fee         = nb2c1.text_input("기름값 (원)",    key=f"{fk}_ff")
-        performance_spec = nb2c2.text_input("성능비 (원)",    key=f"{fk}_ps")
-        sale_price_usd   = nb2c3.text_input("판매가 (USD)",   key=f"{fk}_sp")
-
-        rate_val = st.number_input(
-            "💱 환율 (원/USD)", value=st.session_state.veh_rate,
-            min_value=100, max_value=9999, step=10, key=f"{fk}_rate"
-        )
-
-        vp_p  = safe_int(vehicle_price)
-        cm_p  = safe_int(commission)
-        tf_p  = safe_int(transport_fee)
-        ff_p  = safe_int(fuel_fee)
-        ps_p  = safe_int(performance_spec)
-        sp_p  = safe_int(sale_price_usd)
-        dm_p  = calc_dealer_margin(sp_p)
-        tot_p = vp_p + cm_p + tf_p + ff_p + ps_p + dm_p
-        sal_p = sp_p * rate_val
-        prf_p = sal_p - tot_p
-
-        ni1, ni2, ni3 = st.columns(3)
-        ni1.info(f"🚗 딜러마진(자동): **{dm_p:,}원**")
-        ni2.info(f"📊 총비용: **{tot_p:,}원**")
-        if prf_p >= 0:
-            ni3.success(f"💹 이윤: **+{prf_p:,}원**")
-        else:
-            ni3.error(f"💹 이윤: **{prf_p:,}원**")
-
-        st.markdown("#### 🏷️ 판매 정보")
-        ns1, ns2 = st.columns(2)
-        sale_date   = ns1.text_input("판매일 (YYYY-MM-DD)", key=f"{fk}_sd")
-        seller_name = ns2.text_input("판매자명",            key=f"{fk}_sl")
-
-        st.markdown("#### 👤 구매자 정보")
-        nbc1, nbc2 = st.columns(2)
-        buyer_name  = nbc1.text_input("구매자명", key=f"{fk}_bn")
-        buyer_phone = nbc2.text_input("연락처",   key=f"{fk}_bp")
-        nbc3, nbc4 = st.columns(2)
-        buyer_email   = nbc3.text_input("이메일", key=f"{fk}_be")
-        buyer_address = nbc4.text_input("주소",   key=f"{fk}_ba")
-        notes = st.text_area("📝 메모", height=80, key=f"{fk}_nt")
-
-        nfc1, nfc2 = st.columns(2)
-        submitted = nfc1.form_submit_button("💾 저장", type="primary", use_container_width=True)
-        cancelled = nfc2.form_submit_button("✖ 취소",  use_container_width=True)
-
-    if submitted:
-        if not plate.strip():
-            st.error("번호판은 필수 항목입니다.")
-        else:
-            st.session_state.veh_rate = rate_val
-
-            if make_sel == "✏️ 직접 입력":
-                final_make = make_custom.strip()
-            elif make_sel != "(선택하세요)":
-                final_make = make_sel
-            else:
-                final_make = make_custom.strip()
-
-            save_data = dict(
-                plate            = plate.strip(),
-                make             = final_make,
-                model            = model.strip(),
-                year             = safe_int(year),
-                color            = color.strip(),
-                vin              = vin.strip(),
-                fuel_type        = fuel_type,
-                status           = status,
-                driver           = driver.strip(),
-                mileage          = safe_int(mileage),
-                vehicle_price    = safe_int(vehicle_price),
-                commission       = safe_int(commission),
-                transport_fee    = safe_int(transport_fee),
-                fuel_fee         = safe_int(fuel_fee),
-                sale_price       = safe_int(sale_price_usd),
-                stock_number     = stock_number.strip(),
-                performance_spec = performance_spec.strip(),
-                buyer_name       = buyer_name.strip(),
-                buyer_phone      = buyer_phone.strip(),
-                buyer_email      = buyer_email.strip(),
-                buyer_address    = buyer_address.strip(),
-                notes            = notes.strip(),
-                sale_date        = sale_date.strip(),
-                seller_name      = seller_name.strip(),
-                purchase_date    = purchase_date.strip(),
-            )
-            try:
-                insert_vehicle(save_data)
-                st.success("✅ 등록되었습니다.")
-                st.session_state.veh_show_form = False
-                st.session_state.veh_edit_id   = None
-                st.rerun()
-            except Exception as e:
-                if "unique" in str(e).lower() or "duplicate" in str(e).lower():
-                    st.error("이미 등록된 번호판입니다.")
-                else:
-                    st.error(f"저장 실패: {e}")
-
-    if cancelled:
-        st.session_state.veh_show_form = False
-        st.session_state.veh_edit_id   = None
-        st.rerun()
