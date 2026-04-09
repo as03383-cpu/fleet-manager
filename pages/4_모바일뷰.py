@@ -322,7 +322,6 @@ with tab2:
     PAGE_M = 20
     vehicles = get_all_vehicles_simple()
 
-    # 차량 선택 드롭다운 (모바일은 사이드바 대신 상단 selectbox)
     veh_opts_m = {"전체 보기": None}
     for v in vehicles:
         lbl = f"{v['plate']}  {v.get('make','')} {v.get('model','')}".strip()
@@ -337,8 +336,49 @@ with tab2:
     search_m = st.text_input("🔍 정비내용·번호판 검색", key="mm_search")
 
     if st.button("➕ 정비 등록", type="primary", use_container_width=True, key="mm_add"):
-        st.session_state.mm_show_form = True
+        currently_new = st.session_state.mm_show_form and st.session_state.mm_edit_id is None
+        st.session_state.mm_show_form = not currently_new
         st.session_state.mm_edit_id   = None
+
+    # ── 등록 폼: ➕ 버튼 바로 아래 ────────────────────────────
+    if st.session_state.mm_show_form and st.session_state.mm_edit_id is None:
+        veh_labels_n = [f"{v['plate']}  {v.get('make','')} {v.get('model','')}".strip() for v in vehicles]
+        veh_ids_n    = [v["id"] for v in vehicles]
+        st.markdown("**➕ 정비 등록**")
+        with st.form("mm_form_new"):
+            preset_vid = st.session_state.mm_filter_vid
+            try:    preset_idx = veh_ids_n.index(preset_vid) if preset_vid else 0
+            except: preset_idx = 0
+            sel_veh_n   = st.selectbox("차량 *", veh_labels_n, index=preset_idx)
+            sel_vid_n   = veh_ids_n[veh_labels_n.index(sel_veh_n)] if veh_labels_n else None
+            mdate_n     = st.text_input("정비일자 * (YYYY-MM-DD)", value="")
+            mtype_n     = st.selectbox("정비유형", MAINT_TYPES, index=0)
+            desc_n      = st.text_input("정비내용", value="")
+            cost_n      = st.text_input("비용(원)", value="")
+            mile_n      = st.text_input("주행km", value="")
+            shop_n      = st.text_input("정비소", value="")
+            ndate_n     = st.text_input("다음점검일 (YYYY-MM-DD)", value="")
+            notes_n     = st.text_area("메모", value="", height=70)
+            ns1, ns2    = st.columns(2)
+            sub_n  = ns1.form_submit_button("💾 저장", type="primary", use_container_width=True)
+            can_n  = ns2.form_submit_button("✖ 취소", use_container_width=True)
+        if sub_n:
+            if not mdate_n.strip():
+                st.error("정비일자는 필수입니다.")
+            elif not sel_vid_n:
+                st.error("차량을 선택하세요.")
+            else:
+                try:
+                    insert_maintenance(dict(vehicle_id=sel_vid_n, maint_date=mdate_n.strip(),
+                                           maint_type=mtype_n, description=desc_n.strip(),
+                                           cost=safe_int(cost_n), mileage=safe_int(mile_n),
+                                           shop=shop_n.strip(), next_date=ndate_n.strip(), notes=notes_n.strip()))
+                    st.success("✅ 저장됐어요!")
+                    st.session_state.mm_show_form = False; st.rerun()
+                except Exception as e:
+                    st.error(f"저장 실패: {e}")
+        if can_n:
+            st.session_state.mm_show_form = False; st.rerun()
 
     st.divider()
 
@@ -377,10 +417,52 @@ with tab2:
 
         mb1, mb2 = st.columns(2)
         if mb1.button("✏️ 수정", key=f"mm_edit_{mid}", use_container_width=True):
-            st.session_state.mm_edit_id   = mid
-            st.session_state.mm_show_form = True
+            st.session_state.mm_edit_id   = None if st.session_state.mm_edit_id == mid else mid
+            st.session_state.mm_show_form = False
         if mb2.button("🗑️ 삭제", key=f"mm_del_{mid}", use_container_width=True):
             st.session_state.mm_del_id = mid
+
+        # ── 수정 폼: 해당 레코드 바로 아래 ──────────────────────
+        if st.session_state.mm_edit_id == mid:
+            data_m  = get_maint_record(mid) or {}
+            veh_labels_e = [f"{v['plate']}  {v.get('make','')} {v.get('model','')}".strip() for v in vehicles]
+            veh_ids_e    = [v["id"] for v in vehicles]
+            st.markdown("**✏️ 정비 수정**")
+            with st.form(f"mm_form_{mid}"):
+                preset_vid_e = data_m.get("vehicle_id", st.session_state.mm_filter_vid)
+                try:    preset_idx_e = veh_ids_e.index(preset_vid_e) if preset_vid_e else 0
+                except: preset_idx_e = 0
+                sel_veh_e   = st.selectbox("차량 *", veh_labels_e, index=preset_idx_e)
+                sel_vid_e   = veh_ids_e[veh_labels_e.index(sel_veh_e)] if veh_labels_e else None
+                mdate_e     = st.text_input("정비일자 * (YYYY-MM-DD)", value=data_m.get("maint_date",""))
+                mt_idx_e    = MAINT_TYPES.index(data_m["maint_type"]) if data_m.get("maint_type") in MAINT_TYPES else 0
+                mtype_e     = st.selectbox("정비유형", MAINT_TYPES, index=mt_idx_e)
+                desc_e      = st.text_input("정비내용",  value=data_m.get("description",""))
+                cost_e      = st.text_input("비용(원)",  value=str(data_m.get("cost","") or ""))
+                mile_e      = st.text_input("주행km",    value=str(data_m.get("mileage","") or ""))
+                shop_e      = st.text_input("정비소",    value=data_m.get("shop",""))
+                ndate_e     = st.text_input("다음점검일 (YYYY-MM-DD)", value=data_m.get("next_date",""))
+                notes_e     = st.text_area("메모", value=data_m.get("notes",""), height=70)
+                es1, es2    = st.columns(2)
+                sub_e  = es1.form_submit_button("💾 저장", type="primary", use_container_width=True)
+                can_e  = es2.form_submit_button("✖ 취소", use_container_width=True)
+            if sub_e:
+                if not mdate_e.strip():
+                    st.error("정비일자는 필수입니다.")
+                elif not sel_vid_e:
+                    st.error("차량을 선택하세요.")
+                else:
+                    try:
+                        update_maintenance(mid, dict(vehicle_id=sel_vid_e, maint_date=mdate_e.strip(),
+                                                     maint_type=mtype_e, description=desc_e.strip(),
+                                                     cost=safe_int(cost_e), mileage=safe_int(mile_e),
+                                                     shop=shop_e.strip(), next_date=ndate_e.strip(), notes=notes_e.strip()))
+                        st.success("✅ 저장됐어요!")
+                        st.session_state.mm_edit_id = None; st.rerun()
+                    except Exception as e:
+                        st.error(f"저장 실패: {e}")
+            if can_e:
+                st.session_state.mm_edit_id = None; st.rerun()
 
     # 삭제 확인
     if st.session_state.mm_del_id:
@@ -394,63 +476,6 @@ with tab2:
                 st.session_state.mm_del_id = None; st.rerun()
             if dd2.button("취소", use_container_width=True, key="mm_del_cancel"):
                 st.session_state.mm_del_id = None; st.rerun()
-
-    # 등록 / 수정 폼
-    if st.session_state.mm_show_form:
-        edit_id = st.session_state.mm_edit_id
-        is_edit = edit_id is not None
-        data_m  = get_maint_record(edit_id) if is_edit else {}
-
-        st.divider()
-        st.markdown(f"**{'✏️ 정비 수정' if is_edit else '➕ 정비 등록'}**")
-
-        veh_labels = [f"{v['plate']}  {v.get('make','')} {v.get('model','')}".strip() for v in vehicles]
-        veh_ids    = [v["id"] for v in vehicles]
-
-        with st.form("mm_form"):
-            preset_vid = data_m.get("vehicle_id", st.session_state.mm_filter_vid)
-            try:    preset_idx = veh_ids.index(preset_vid) if preset_vid else 0
-            except: preset_idx = 0
-
-            sel_veh = st.selectbox("차량 *", veh_labels, index=preset_idx)
-            sel_vid = veh_ids[veh_labels.index(sel_veh)] if veh_labels else None
-
-            maint_date = st.text_input("정비일자 * (YYYY-MM-DD)", value=data_m.get("maint_date",""))
-            mt_idx = MAINT_TYPES.index(data_m["maint_type"]) if data_m.get("maint_type") in MAINT_TYPES else 0
-            maint_type  = st.selectbox("정비유형", MAINT_TYPES, index=mt_idx)
-            description = st.text_input("정비내용", value=data_m.get("description",""))
-            cost      = st.text_input("비용(원)",   value=str(data_m.get("cost","") or ""))
-            mileage_m = st.text_input("주행km",     value=str(data_m.get("mileage","") or ""))
-            shop      = st.text_input("정비소",     value=data_m.get("shop",""))
-            next_date = st.text_input("다음점검일 (YYYY-MM-DD)", value=data_m.get("next_date",""))
-            notes_m   = st.text_area("메모", value=data_m.get("notes",""), height=70)
-
-            ms1, ms2 = st.columns(2)
-            sub_m = ms1.form_submit_button("💾 저장", type="primary", use_container_width=True)
-            can_m = ms2.form_submit_button("✖ 취소", use_container_width=True)
-
-        if sub_m:
-            if not maint_date.strip():
-                st.error("정비일자는 필수입니다.")
-            elif not sel_vid:
-                st.error("차량을 선택하세요.")
-            else:
-                save_m = dict(vehicle_id=sel_vid, maint_date=maint_date.strip(),
-                              maint_type=maint_type, description=description.strip(),
-                              cost=safe_int(cost), mileage=safe_int(mileage_m),
-                              shop=shop.strip(), next_date=next_date.strip(), notes=notes_m.strip())
-                try:
-                    if is_edit: update_maintenance(edit_id, save_m)
-                    else:       insert_maintenance(save_m)
-                    st.success("✅ 저장됐어요!")
-                    st.session_state.mm_show_form = False
-                    st.session_state.mm_edit_id   = None
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"저장 실패: {e}")
-        if can_m:
-            st.session_state.mm_show_form = False
-            st.session_state.mm_edit_id   = None; st.rerun()
 
 # ══════════════════════════════════════════════════════════════
 # TAB 3 — 위치 관리
@@ -471,8 +496,41 @@ with tab3:
         st.session_state.ml_page = 0
 
     if st.button("➕ 위치 등록", type="primary", use_container_width=True, key="ml_add"):
-        st.session_state.ml_show_form = True
+        currently_new_l = st.session_state.ml_show_form and st.session_state.ml_edit_id is None
+        st.session_state.ml_show_form = not currently_new_l
         st.session_state.ml_edit_id   = None
+
+    # ── 등록 폼: ➕ 버튼 바로 아래 ────────────────────────────
+    if st.session_state.ml_show_form and st.session_state.ml_edit_id is None:
+        veh_labels_ln = [f"{v['plate']}  {v.get('make','')} {v.get('model','')}".strip() for v in vehicles_l]
+        veh_ids_ln    = [v["id"] for v in vehicles_l]
+        st.markdown("**➕ 위치 등록**")
+        with st.form("ml_form_new"):
+            preset_vid_ln = st.session_state.ml_filter_vid
+            try:    preset_idx_ln = veh_ids_ln.index(preset_vid_ln) if preset_vid_ln else 0
+            except: preset_idx_ln = 0
+            sel_veh_ln    = st.selectbox("차량 *", veh_labels_ln, index=preset_idx_ln)
+            sel_vid_ln    = veh_ids_ln[veh_labels_ln.index(sel_veh_ln)] if veh_labels_ln else None
+            loc_name_n    = st.text_input("위치명", value="")
+            addr_n        = st.text_input("주소",   value="")
+            drv_n         = st.text_input("담당자", value="")
+            notes_ln      = st.text_area("메모", value="", height=70)
+            lns1, lns2    = st.columns(2)
+            sub_ln  = lns1.form_submit_button("💾 저장", type="primary", use_container_width=True)
+            can_ln  = lns2.form_submit_button("✖ 취소", use_container_width=True)
+        if sub_ln:
+            if not sel_vid_ln:
+                st.error("차량을 선택하세요.")
+            else:
+                try:
+                    insert_location(dict(vehicle_id=sel_vid_ln, location_name=loc_name_n.strip(),
+                                         address=addr_n.strip(), driver=drv_n.strip(), notes=notes_ln.strip()))
+                    st.success("✅ 저장됐어요!")
+                    st.session_state.ml_show_form = False; st.rerun()
+                except Exception as e:
+                    st.error(f"저장 실패: {e}")
+        if can_ln:
+            st.session_state.ml_show_form = False; st.rerun()
 
     st.divider()
 
@@ -511,10 +569,43 @@ with tab3:
 
         lb1, lb2 = st.columns(2)
         if lb1.button("✏️ 수정", key=f"ml_edit_{lid}", use_container_width=True):
-            st.session_state.ml_edit_id   = lid
-            st.session_state.ml_show_form = True
+            st.session_state.ml_edit_id   = None if st.session_state.ml_edit_id == lid else lid
+            st.session_state.ml_show_form = False
         if lb2.button("🗑️ 삭제", key=f"ml_del_{lid}", use_container_width=True):
             st.session_state.ml_del_id = lid
+
+        # ── 수정 폼: 해당 레코드 바로 아래 ──────────────────────
+        if st.session_state.ml_edit_id == lid:
+            data_le = get_location(lid) or {}
+            veh_labels_le = [f"{v['plate']}  {v.get('make','')} {v.get('model','')}".strip() for v in vehicles_l]
+            veh_ids_le    = [v["id"] for v in vehicles_l]
+            st.markdown("**✏️ 위치 수정**")
+            with st.form(f"ml_form_{lid}"):
+                preset_vid_le = data_le.get("vehicle_id", st.session_state.ml_filter_vid)
+                try:    preset_idx_le = veh_ids_le.index(preset_vid_le) if preset_vid_le else 0
+                except: preset_idx_le = 0
+                sel_veh_le  = st.selectbox("차량 *", veh_labels_le, index=preset_idx_le)
+                sel_vid_le  = veh_ids_le[veh_labels_le.index(sel_veh_le)] if veh_labels_le else None
+                loc_name_e  = st.text_input("위치명", value=data_le.get("location_name",""))
+                addr_e      = st.text_input("주소",   value=data_le.get("address",""))
+                drv_e       = st.text_input("담당자", value=data_le.get("driver",""))
+                notes_le    = st.text_area("메모", value=data_le.get("notes",""), height=70)
+                les1, les2  = st.columns(2)
+                sub_le = les1.form_submit_button("💾 저장", type="primary", use_container_width=True)
+                can_le = les2.form_submit_button("✖ 취소", use_container_width=True)
+            if sub_le:
+                if not sel_vid_le:
+                    st.error("차량을 선택하세요.")
+                else:
+                    try:
+                        update_location(lid, dict(vehicle_id=sel_vid_le, location_name=loc_name_e.strip(),
+                                                   address=addr_e.strip(), driver=drv_e.strip(), notes=notes_le.strip()))
+                        st.success("✅ 저장됐어요!")
+                        st.session_state.ml_edit_id = None; st.rerun()
+                    except Exception as e:
+                        st.error(f"저장 실패: {e}")
+            if can_le:
+                st.session_state.ml_edit_id = None; st.rerun()
 
     # 삭제 확인
     if st.session_state.ml_del_id:
@@ -526,50 +617,3 @@ with tab3:
             st.session_state.ml_del_id = None; st.rerun()
         if ld2.button("취소", use_container_width=True, key="ml_del_cancel"):
             st.session_state.ml_del_id = None; st.rerun()
-
-    # 등록 / 수정 폼
-    if st.session_state.ml_show_form:
-        edit_id_l = st.session_state.ml_edit_id
-        is_edit_l = edit_id_l is not None
-        data_l    = get_location(edit_id_l) if is_edit_l else {}
-
-        st.divider()
-        st.markdown(f"**{'✏️ 위치 수정' if is_edit_l else '➕ 위치 등록'}**")
-
-        veh_labels_l = [f"{v['plate']}  {v.get('make','')} {v.get('model','')}".strip() for v in vehicles_l]
-        veh_ids_l    = [v["id"] for v in vehicles_l]
-
-        with st.form("ml_form"):
-            preset_vid_l = data_l.get("vehicle_id", st.session_state.ml_filter_vid)
-            try:    preset_idx_l = veh_ids_l.index(preset_vid_l) if preset_vid_l else 0
-            except: preset_idx_l = 0
-
-            sel_veh_l = st.selectbox("차량 *", veh_labels_l, index=preset_idx_l)
-            sel_vid_l = veh_ids_l[veh_labels_l.index(sel_veh_l)] if veh_labels_l else None
-
-            location_name = st.text_input("위치명",  value=data_l.get("location_name",""))
-            address_l     = st.text_input("주소",    value=data_l.get("address",""))
-            driver_l      = st.text_input("담당자",  value=data_l.get("driver",""))
-            notes_l       = st.text_area("메모", value=data_l.get("notes",""), height=70)
-
-            ls1, ls2 = st.columns(2)
-            sub_l = ls1.form_submit_button("💾 저장", type="primary", use_container_width=True)
-            can_l = ls2.form_submit_button("✖ 취소", use_container_width=True)
-
-        if sub_l:
-            if not sel_vid_l:
-                st.error("차량을 선택하세요.")
-            else:
-                save_l = dict(vehicle_id=sel_vid_l, location_name=location_name.strip(),
-                              address=address_l.strip(), driver=driver_l.strip(), notes=notes_l.strip())
-                try:
-                    if is_edit_l: update_location(edit_id_l, save_l)
-                    else:         insert_location(save_l)
-                    st.success("✅ 저장됐어요!")
-                    st.session_state.ml_show_form = False
-                    st.session_state.ml_edit_id   = None; st.rerun()
-                except Exception as e:
-                    st.error(f"저장 실패: {e}")
-        if can_l:
-            st.session_state.ml_show_form = False
-            st.session_state.ml_edit_id   = None; st.rerun()
