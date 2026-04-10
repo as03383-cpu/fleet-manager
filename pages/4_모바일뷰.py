@@ -22,6 +22,18 @@ from utils.helpers import (
 
 st.set_page_config(page_title="📱 모바일", page_icon="📱", layout="centered")
 
+def _fmt_kst(ts):
+    """UTC 타임스탬프 → 한국 표준시(KST, UTC+9), YYYY-MM-DD HH:MM 형식으로 반환"""
+    if not ts:
+        return "-"
+    try:
+        from datetime import datetime, timezone, timedelta
+        KST = timezone(timedelta(hours=9))
+        dt  = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        return dt.astimezone(KST).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return str(ts)[:16]
+
 MAKE_OPTIONS = ["(선택하세요)"] + MAKES_LIST + ["✏️ 직접 입력"]
 
 # ── CSS ──────────────────────────────────────────────────────
@@ -558,7 +570,7 @@ with tab3:
 <div class="lcard">
   <div class="card-header">
     <span style="font-weight:bold;color:#86efac">📍 {r.get('plate','')}</span>
-    <span style="font-size:0.78rem;color:#94a3b8">{str(r.get('recorded_at',''))[:16]}</span>
+    <span style="font-size:0.78rem;color:#e2e8f0">{_fmt_kst(r.get('recorded_at',''))}</span>
   </div>
   <div class="card-row"><span>위치명</span><span class="card-val">{r.get('location_name','') or '-'}</span></div>
   <div class="card-row"><span>주소</span><span class="card-val">{r.get('address','') or '-'}</span></div>
