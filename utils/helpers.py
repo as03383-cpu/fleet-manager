@@ -15,7 +15,7 @@ STATUS_COLORS = {
     "폐차":        "#6b7280",
 }
 
-MAINT_TYPES = ["엔진오일","브레이크","타이어","세차","점검","기타"]
+MAINT_TYPES = ["수리","세차","기타"]
 
 def safe_int(v, default=0):
     try:
