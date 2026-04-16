@@ -204,7 +204,7 @@ if st.session_state.veh_show_form and st.session_state.veh_edit_id is None:
 all_rows = get_vehicles(search=search, status_filter=status_filter)
 
 col_filters = st.session_state.veh_col_filter
-FILTER_KEYS = {"제조사": "make", "담당자": "driver", "연식": "year"}
+FILTER_KEYS = {"상태": "status", "판매자": "seller_name"}
 filtered_rows = all_rows
 for col_label, col_key in FILTER_KEYS.items():
     fval = col_filters.get(col_label)
@@ -226,7 +226,7 @@ for col_label, col_key in FILTER_KEYS.items():
     vals = sorted({str(r.get(col_key, "") or "") for r in all_rows if r.get(col_key)})
     unique_vals[col_label] = vals
 
-with st.expander("🔽 컬럼별 필터 (제조사 / 담당자 / 연식)", expanded=False):
+with st.expander("🔽 컬럼별 필터 (상태 / 판매자)", expanded=False):
     fcols = st.columns(len(FILTER_KEYS))
     for i, (col_label, col_key) in enumerate(FILTER_KEYS.items()):
         options = ["전체"] + unique_vals.get(col_label, [])
