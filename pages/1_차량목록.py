@@ -1,12 +1,4 @@
-"""
-pages/1_차량목록.py — 차량 목록 / 등록 / 수정 / 삭제
-변경사항:
-  - 수정 폼: 해당 차량 행 바로 아래 인라인 표시
-  - 환율 입력: 상단 바 제거 → 수정 폼 비용정보 이윤 바로 위로 이동
-  - 딜러마진 자동계산: 판매가 ≤2500→50만, 2501~3000→70만, 3001+→100만
-  - 제조사: 드롭다운(Chevrolet/Renault/KG Mobility/Kia/Hyundai) + 직접입력
-  - 컬럼 필터 (제조사/담당자/연식) + 페이지네이션 (100건)
-"""
+"""pages/1_차량목록.py — 차량 목록 / 등록 / 수정 / 삭제"""
 
 import streamlit as st
 from utils.db import (
@@ -19,6 +11,12 @@ from utils.helpers import (
 )
 
 MAKE_OPTIONS = ["(선택하세요)"] + MAKES_LIST + ["✏️ 직접 입력"]
+
+def resolve_make(sel, custom):
+    """제조사 드롭다운 + 직접입력 → 최종 문자열"""
+    if sel == "✏️ 직접 입력": return custom.strip()
+    if sel != "(선택하세요)":  return sel
+    return custom.strip()
 
 st.set_page_config(page_title="차량 목록", page_icon="🚗", layout="wide")
 st.markdown(MOBILE_CSS, unsafe_allow_html=True)
@@ -75,7 +73,7 @@ for key, default in [
 
 PAGE_SIZE = 100
 
-# ── 상단 바 (환율 제거 → 3컬럼) ──────────────────────────────
+# ── 상단 바 ──────────────────────────────────────────────────
 c1, c2, c3 = st.columns([4, 3, 1])
 with c1:
     search = st.text_input("🔍 검색 (번호판·제조사·모델·스톡넘버)", key="veh_search")
@@ -171,12 +169,9 @@ if st.session_state.veh_show_form and st.session_state.veh_edit_id is None:
             st.error("번호판은 필수 항목입니다.")
         else:
             st.session_state.veh_rate = rate_val
-            if make_sel == "✏️ 직접 입력":   final_make = make_custom.strip()
-            elif make_sel != "(선택하세요)":  final_make = make_sel
-            else:                             final_make = make_custom.strip()
             try:
                 insert_vehicle(dict(
-                    plate=plate.strip(), make=final_make, model=model.strip(),
+                    plate=plate.strip(), make=resolve_make(make_sel, make_custom), model=model.strip(),
                     year=safe_int(year), color=color.strip(), vin=vin.strip(),
                     fuel_type=fuel_type, status=status, driver=driver.strip(),
                     mileage=safe_int(mileage), vehicle_price=safe_int(vehicle_price),
@@ -262,22 +257,20 @@ else:
     end       = min(start + PAGE_SIZE, total_count)
     page_rows = rows[start:end]
 
-    # 페이지 네비게이션 (상단)
-    if total_pages > 1:
+    def page_nav(suffix):
         n1, n2, n3 = st.columns([1, 3, 1])
-        if n1.button("◀ 이전", disabled=(page == 0), use_container_width=True, key="prev_top"):
-            st.session_state.veh_page = page - 1
-            st.rerun()
+        if n1.button("◀ 이전", disabled=(page == 0), use_container_width=True, key=f"vprev_{suffix}"):
+            st.session_state.veh_page = page - 1; st.rerun()
         n2.markdown(
             f"<div style='text-align:center;padding:8px;color:#94a3b8'>"
             f"페이지 {page+1}/{total_pages}  (전체 {total_count}대)</div>",
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
-        if n3.button("다음 ▶", disabled=(page >= total_pages - 1), use_container_width=True, key="next_top"):
-            st.session_state.veh_page = page + 1
-            st.rerun()
-    else:
-        st.caption(f"총 **{total_count}**대")
+        if n3.button("다음 ▶", disabled=(page >= total_pages - 1), use_container_width=True, key=f"vnext_{suffix}"):
+            st.session_state.veh_page = page + 1; st.rerun()
+
+    if total_pages > 1: page_nav("top")
+    else: st.caption(f"총 **{total_count}**대")
 
     # 테이블 헤더
     COL_RATIO = [1.2, 1.5, 1.2, 1, 1.2, 0.8, 2.2, 1.5, 1.3, 1.2, 1.5, 0.7, 0.7, 0.7, 0.7]
@@ -533,17 +526,9 @@ else:
                 if not plate.strip():
                     st.error("번호판은 필수 항목입니다.")
                 else:
-                    # 제조사 결정
-                    if make_sel == "✏️ 직접 입력":
-                        final_make = make_custom.strip()
-                    elif make_sel != "(선택하세요)":
-                        final_make = make_sel
-                    else:
-                        final_make = make_custom.strip()
-
                     save_data = dict(
                         plate            = plate.strip(),
-                        make             = final_make,
+                        make             = resolve_make(make_sel, make_custom),
                         model            = model.strip(),
                         year             = safe_int(year),
                         color            = color.strip(),
@@ -585,20 +570,7 @@ else:
                 st.session_state.veh_edit_id   = None
                 st.rerun()
 
-    # 페이지 네비게이션 (하단)
-    if total_pages > 1:
-        n1b, n2b, n3b = st.columns([1, 3, 1])
-        if n1b.button("◀ 이전", disabled=(page == 0), use_container_width=True, key="prev_bot"):
-            st.session_state.veh_page = page - 1
-            st.rerun()
-        n2b.markdown(
-            f"<div style='text-align:center;padding:8px;color:#94a3b8'>"
-            f"페이지 {page+1}/{total_pages}  (전체 {total_count}대)</div>",
-            unsafe_allow_html=True
-        )
-        if n3b.button("다음 ▶", disabled=(page >= total_pages - 1), use_container_width=True, key="next_bot"):
-            st.session_state.veh_page = page + 1
-            st.rerun()
+    if total_pages > 1: page_nav("bot")
 
 # ── 삭제 확인 ────────────────────────────────────────────────
 if st.session_state.veh_confirm_del:

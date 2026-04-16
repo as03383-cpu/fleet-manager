@@ -1,24 +1,12 @@
 """pages/3_위치관리.py — 위치 기록 관리"""
 
 import streamlit as st
-from datetime import datetime, timezone, timedelta
 from utils.db import (
     get_locations, get_location, insert_location,
     update_location, delete_location,
     get_all_vehicles_simple,
 )
-from utils.helpers import MOBILE_CSS
-
-def _fmt_kst(ts):
-    """UTC 타임스탬프 → KST(UTC+9), YYYY-MM-DD HH:MM 형식"""
-    if not ts:
-        return "-"
-    try:
-        KST = timezone(timedelta(hours=9))
-        dt  = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-        return dt.astimezone(KST).strftime("%Y-%m-%d %H:%M")
-    except Exception:
-        return str(ts)[:16]
+from utils.helpers import MOBILE_CSS, fmt_kst
 
 st.set_page_config(page_title="위치 관리", page_icon="📍", layout="wide")
 st.markdown(MOBILE_CSS, unsafe_allow_html=True)
@@ -52,7 +40,7 @@ with st.sidebar:
         st.session_state.loc_page = 0
 
 # ── 등록 버튼 ────────────────────────────────────────────────
-c1, c2 = st.columns([6, 1])
+_, c2 = st.columns([6, 1])
 c2.write("")
 if c2.button("➕ 위치 등록", type="primary", use_container_width=True):
     st.session_state.loc_show_form = True
@@ -146,7 +134,7 @@ else:
     rows = all_rows[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
     for r in rows:
         rc = st.columns(COL)
-        rc[0].write(_fmt_kst(r.get("recorded_at","")))
+        rc[0].write(fmt_kst(r.get("recorded_at","")))
         rc[1].write(r.get("plate",""))
         rc[2].write(r.get("location_name","") or "-")
         rc[3].write(r.get("notes","") or "-")

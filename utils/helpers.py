@@ -1,5 +1,7 @@
 """helpers.py — 공통 상수 및 유틸리티"""
 
+from datetime import datetime, timezone, timedelta
+
 STATUS_LIST = ["정비대기","정비중","세차중","판매준비완료","판매완료","폐차대기","폐차"]
 FUEL_TYPES  = ["가솔린","디젤","LPG","하이브리드","전기","수소"]
 KM_TO_MI    = 0.621371
@@ -16,6 +18,17 @@ STATUS_COLORS = {
 }
 
 MAINT_TYPES = ["수리","세차","기타"]
+
+def fmt_kst(ts):
+    """UTC 타임스탬프 → KST(UTC+9), YYYY-MM-DD HH:MM 형식"""
+    if not ts:
+        return "-"
+    try:
+        KST = timezone(timedelta(hours=9))
+        dt  = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        return dt.astimezone(KST).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return str(ts)[:16]
 
 def safe_int(v, default=0):
     try:
